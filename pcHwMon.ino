@@ -12,8 +12,8 @@
 #define GREEN2RED 4
 #define RED2GREEN 5
 
-#define TFT_W 240   //320
-#define TFT_H 320   //480
+#define TFT_W 320   //320
+#define TFT_H 480   //480
 #define TFT_DC 9
 #define TFT_CS 10
 
@@ -25,7 +25,7 @@
 #define FRAME_LINE_SPACING 3
 
 #define GRAPH_COLOR TFT_WHITE
-#define GRAPH_H 70
+//#define GRAPH_H 70
 
 
 //define Keys (inherited from pcHwMon_server )
@@ -52,7 +52,7 @@ const int RING_H = RING_RADIUS+FRAME_PADDING;
 const int FRAME_BOTTOM_Y = FRAME_TITLE_H + RING_H*3.3 + FRAME_PADDING;
 
 const int GRAPH_W = TFT_W - FRAME_INFO_W - FRAME_PADDING*2;
-
+const int GRAPH_H = TFT_H - FRAME_BOTTOM_Y - 60 - FRAME_PADDING; //60 height of 3 lines (header, detailed FPS, current fps)
 
 int graphBuffer[GRAPH_W];
 int graphIndex = 0;
@@ -68,7 +68,7 @@ void setup() {
   uint16_t ID = tft.readID();
   if (ID == 0xD3) ID = 0x9481;
   tft.begin(ID);
-  tft.setRotation(1);
+  tft.setRotation(0);
   tft.fillScreen(TFT_BLACK);
 
   //Middle Vertical Line
@@ -134,14 +134,31 @@ void updateMetric(int key, int value) {
   switch (key)
   {
   case KEYCPULOAD:
-    ringMeter(value, 0, 100, TFT_W/2+FRAME_PADDING, FRAME_TITLE_H + FRAME_PADDING, RING_RADIUS, "C", "temp", BLUE2RED);
-        Serial.println("TAGADAAAAAA");
+    ringMeter(value, 0, 100, FRAME_PADDING, FRAME_TITLE_H + RING_H + FRAME_PADDING, RING_RADIUS, "%", "usage", GREEN2RED); // Draw analogue meter
     break;
   case KEYCPUTEMP:
     ringMeter(value, 0, 100, FRAME_PADDING, FRAME_TITLE_H + FRAME_PADDING, RING_RADIUS, "C", "temp", BLUE2RED);
-        Serial.println("TAGADAAAAAA2");
     break;
-  
+  case KEYRAMLOAD:
+    //ram usage
+    ringMeter(value, 0, 100, FRAME_PADDING, FRAME_TITLE_H + RING_H*2 + FRAME_PADDING, RING_RADIUS, "%", "ram", GREEN2RED); // Draw analogue meter
+    break;
+  case KEYGPUTEMP:
+    //gpu temp
+    ringMeter(value, 0, 100, TFT_W/2+FRAME_PADDING, FRAME_TITLE_H + FRAME_PADDING, RING_RADIUS, "C", "temp", BLUE2RED); // Draw analogue meter
+    break;
+  case KEYGPULOAD:
+    //gpu usage
+    ringMeter(value, 0, 100, TFT_W/2+FRAME_PADDING, FRAME_TITLE_H + RING_H + FRAME_PADDING, RING_RADIUS, "%", "usage", GREEN2RED); // Draw analogue meter
+    break;
+  case KEYGPUFAN:
+    //gpu fan
+    ringMeter(value, 0, 100, TFT_W/2+FRAME_PADDING, FRAME_TITLE_H + RING_H*2 + FRAME_PADDING, RING_RADIUS, "%", "fan", BLUE2BLUE);
+    break;
+  case KEYFPS:
+    drawFPS(value, FRAME_INFO_W+1, FRAME_BOTTOM_Y);
+    break;
+
   default:
     break;
   }
@@ -169,7 +186,7 @@ int ringMeter(int value, int vmin, int vmax, int x, int y, int r, const String &
 
   int v = map(value, vmin, vmax, -angle, angle); // Map the value to an angle v
 
-  byte seg = 6; // Segments are 5 degrees wide = 60 segments for 300 degrees
+  byte seg = 3; // Segments are 5 degrees wide = 60 segments for 300 degrees
   byte inc = 6; // Draw segments every 5 degrees, increase to 10 for segmented ring
 
   tft.fillRect(x-r/2, y-r/2, r, r/2, TFT_BLACK);
@@ -347,11 +364,18 @@ void drawFPS(int value, int x, int y)
 
   graphBuffer[graphIndex] = value;
 
+  char curFPS[4] = {'-','-','-'};
+  char avgFPS[4] = {'-','-','-'};
+  char minFPS[4] = {'-','-','-'};
+  char maxFPS[4] = {'-','-','-'};
+
   int graphW = TFT_W-3-x;
   int graphH = TFT_H-3-(y+50);
 
   int minValue = 999;
   int maxValue = 0;
+  int avgValue = 0;
+  int nbValue = 0;
 
   for(int i=0; i<GRAPH_W; i++)
   {
@@ -364,7 +388,17 @@ void drawFPS(int value, int x, int y)
     if (graphBuffer[i] > maxValue) {
       maxValue = graphBuffer[i];
     }
+
+    avgValue += graphBuffer[i];
+    nbValue++;
   }
+
+  avgValue /= nbValue;
+
+  if (value != -1) sprintf(curFPS, "%3d", value);
+  if (avgValue != 0) sprintf(avgFPS, "%3d", avgValue);
+  if (minValue != 999) sprintf(minFPS, "%3d", minValue);
+  if (maxValue != 0) sprintf(maxFPS, "%3d", maxValue);
 
   minValue -= 10;
   maxValue += 10;
@@ -374,19 +408,33 @@ void drawFPS(int value, int x, int y)
   for(int i=1; i <= GRAPH_W; i++) 
   {
     int value = graphBuffer[(i+graphIndex)%GRAPH_W];
+    int nxtValue = graphBuffer[(i+1+graphIndex)%GRAPH_W];
+
+    //we clear the next horizontal line if nxtValue != -1
+    if (nxtValue != -1) {
+      tft.drawLine(FRAME_INFO_W + FRAME_PADDING + i + 1, TFT_H-3-GRAPH_H, FRAME_INFO_W + FRAME_PADDING + i + 1, TFT_H-3, TFT_BLACK);
+    }
 
     if (value == -1) {
       continue;
     }
 
-    tft.drawLine(FRAME_INFO_W + FRAME_PADDING + i, TFT_H-3-GRAPH_H, FRAME_INFO_W + FRAME_PADDING + i, TFT_H-3, TFT_BLACK);
-    tft.drawPixel(FRAME_INFO_W + FRAME_PADDING + i, TFT_H-3-GRAPH_H + (GRAPH_H-float(value-minValue)/rangeValue*GRAPH_H), GRAPH_COLOR);
+    if (nxtValue == -1) {
+      tft.drawPixel(FRAME_INFO_W + FRAME_PADDING + i, TFT_H-3-GRAPH_H + (GRAPH_H-float(value-minValue)/rangeValue*GRAPH_H), GRAPH_COLOR);
+    }
+    else {
+      tft.drawLine(FRAME_INFO_W + FRAME_PADDING + i, TFT_H-3-GRAPH_H + (GRAPH_H-float(value-minValue)/rangeValue*GRAPH_H), FRAME_INFO_W + FRAME_PADDING + i +1, TFT_H-3-GRAPH_H + (GRAPH_H-float(nxtValue-minValue)/rangeValue*GRAPH_H), GRAPH_COLOR);
+    }
+
   }
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
   tft.setTextSize(2);
-  drawHRAlignedString(String(value)+"fps",TFT_W-3, FRAME_BOTTOM_Y + 3);
+  
+  // min | avg | max | cur 
+  drawHRAlignedString("min | avg | max",TFT_W-3, FRAME_BOTTOM_Y + 3);
+  drawHRAlignedString(String(minFPS) + " | " + String(avgFPS) + " | " + String(maxFPS),TFT_W-3, FRAME_BOTTOM_Y + 3 + 20);
+  drawHRAlignedString(String(curFPS) + " fps",TFT_W-3, FRAME_BOTTOM_Y + 3 + 40);
 
   graphIndex = (graphIndex+1)%GRAPH_W;
-
 }
