@@ -1,4 +1,4 @@
-#include <Adafruit_GFX.h>    // Core graphics library
+#include <Adafruit_GFX.h>
 #include <MCUFRIEND_kbv.h>   // Hardware-specific library
 
 //----------for the TMP36 temp sensor---------
@@ -43,7 +43,10 @@
 #define KEYDD1TEMP 10
 #define KEYDD2TEMP 11
 
-#define KEYFPS     12
+#define KEYCPUFAN  12
+#define KEYCHAFAN  13
+
+#define KEYFPS     14
 
 
 const int RING_RADIUS = (TFT_W/2-FRAME_PADDING*2)/2;
@@ -116,16 +119,18 @@ void loop() {
     String received = Serial.readStringUntil(':');
     //-------HANDSHAKE---------
     if (received == "*****") {
-      Serial.println('R');
+      Serial.println("HCK");
       break;
     }
     else {
-      Serial.println("Instruction received : " + received);
+      // Serial.println("Instruction received : " + received);
       int key = atoi(received.c_str());
       int value = atoi(Serial.readStringUntil(';').c_str());
 
-      Serial.println("Parsed to key : " + String(key) + ", value:" + String(value));
+      // Serial.println("Parsed to key : " + String(key) + ", value:" + String(value));
       updateMetric(key, value);
+
+      Serial.println("ACK");
     }
   }
 }
@@ -155,6 +160,23 @@ void updateMetric(int key, int value) {
     //gpu fan
     ringMeter(value, 0, 100, TFT_W/2+FRAME_PADDING, FRAME_TITLE_H + RING_H*2 + FRAME_PADDING, RING_RADIUS, "%", "fan", BLUE2BLUE);
     break;
+
+  case KEYMBDTEMP:
+    barMeter(value, 0, 75, FRAME_PADDING, FRAME_BOTTOM_Y+FRAME_PADDING , FRAME_INFO_W-FRAME_PADDING*2 , 25 , "C", "(MB)", BLUE2RED); // Draw bar meter
+    break;
+  case KEYDD1TEMP:
+    barMeter(value, 0, 75, FRAME_PADDING, FRAME_BOTTOM_Y+FRAME_PADDING+8+25 , FRAME_INFO_W-FRAME_PADDING*2 , 25 , "C", "(NVME)", BLUE2RED); // Draw bar meter
+    break;
+  case KEYDD2TEMP:
+    barMeter(value, 0, 75, FRAME_PADDING, FRAME_BOTTOM_Y+FRAME_PADDING+8*2+25*2 , FRAME_INFO_W-FRAME_PADDING*2 , 25 , "C", "(SSD)", BLUE2RED); // Draw bar meter    
+    break;
+  case KEYCPUFAN:
+    barMeter(value, 0, 100, FRAME_PADDING, FRAME_BOTTOM_Y+FRAME_PADDING+8*3+25*3 , FRAME_INFO_W-FRAME_PADDING*2 , 25 , "%", "(CPU)", BLUE2BLUE); // Draw bar meter    
+    break;
+  case KEYCHAFAN:
+    barMeter(value, 0, 100, FRAME_PADDING, FRAME_BOTTOM_Y+FRAME_PADDING+8*4+25*4 , FRAME_INFO_W-FRAME_PADDING*2 , 25 , "%", "(CHA)", BLUE2BLUE); // Draw bar meter    
+    break;
+
   case KEYFPS:
     drawFPS(value, FRAME_INFO_W+1, FRAME_BOTTOM_Y);
     break;
@@ -186,8 +208,8 @@ int ringMeter(int value, int vmin, int vmax, int x, int y, int r, const String &
 
   int v = map(value, vmin, vmax, -angle, angle); // Map the value to an angle v
 
-  byte seg = 3; // Segments are 5 degrees wide = 60 segments for 300 degrees
-  byte inc = 6; // Draw segments every 5 degrees, increase to 10 for segmented ring
+  byte seg = 5; // Segments are 5 degrees wide = 60 segments for 300 degrees
+  byte inc = 10; // Draw segments every 5 degrees, increase to 10 for segmented ring
 
   tft.fillRect(x-r/2, y-r/2, r, r/2, TFT_BLACK);
 
@@ -410,6 +432,12 @@ void drawFPS(int value, int x, int y)
     int value = graphBuffer[(i+graphIndex)%GRAPH_W];
     int nxtValue = graphBuffer[(i+1+graphIndex)%GRAPH_W];
 
+
+    //clear if we are at first index
+    if (i == 1) {
+      tft.drawLine(FRAME_INFO_W + FRAME_PADDING + i, TFT_H-3-GRAPH_H, FRAME_INFO_W + FRAME_PADDING + i, TFT_H-3, TFT_BLACK);
+    }
+
     //we clear the next horizontal line if nxtValue != -1
     if (nxtValue != -1) {
       tft.drawLine(FRAME_INFO_W + FRAME_PADDING + i + 1, TFT_H-3-GRAPH_H, FRAME_INFO_W + FRAME_PADDING + i + 1, TFT_H-3, TFT_BLACK);
@@ -423,7 +451,7 @@ void drawFPS(int value, int x, int y)
       tft.drawPixel(FRAME_INFO_W + FRAME_PADDING + i, TFT_H-3-GRAPH_H + (GRAPH_H-float(value-minValue)/rangeValue*GRAPH_H), GRAPH_COLOR);
     }
     else {
-      tft.drawLine(FRAME_INFO_W + FRAME_PADDING + i, TFT_H-3-GRAPH_H + (GRAPH_H-float(value-minValue)/rangeValue*GRAPH_H), FRAME_INFO_W + FRAME_PADDING + i +1, TFT_H-3-GRAPH_H + (GRAPH_H-float(nxtValue-minValue)/rangeValue*GRAPH_H), GRAPH_COLOR);
+      tft.drawLine(FRAME_INFO_W + FRAME_PADDING + i, TFT_H-3-GRAPH_H + (GRAPH_H-float(value-minValue)/rangeValue*GRAPH_H), FRAME_INFO_W + FRAME_PADDING + i + 1, TFT_H-3-GRAPH_H + (GRAPH_H-float(nxtValue-minValue)/rangeValue*GRAPH_H), GRAPH_COLOR);
     }
 
   }
